@@ -1,0 +1,118 @@
+version: '3'
+
+networks:
+    bowmannet:
+        driver: bridge
+
+services:
+  redis:
+    image: redis:latest
+    container_name: redis
+    hostname: redis
+    restart: always
+    environment:
+        - TZ=Asia/Shanghai
+    ports:
+    - "6379:6379"
+    volumes:
+      - ./data/redis:/data
+    networks:
+    - bowmannet
+
+  prometheus:
+    image: bitnami/prometheus:latest
+    user: "root" #进Linux环境的话会遇到报错没权限，生产当中改变那个目录权限，而不是靠root用户权限（最好还是自定义一个docker吧）
+    container_name: prometheus
+    hostname: prometheus
+    restart: always
+    environment:
+        - TZ=Asia/Shanghai
+    ports:
+    - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml 
+      - ./data/prometheus:/prometheus
+    networks:
+    - bowmannet
+
+
+  mysqld-exporter:
+    build: ./soft/images/bowmansqlexp/
+    container_name: mysqld-exporter
+    command:
+    - '--config.my-cnf=/etc/.my.cnf'
+    hostname: mysqld-exporter
+    restart: always
+    environment:
+        - TZ=Asia/Shanghai
+        # - DATA_SOURCE_NAME="root:123456@(bowmansql:3306)"
+    # volumes:
+    #     - ./MySQL_image/my.cnf:/my.cnf
+    ports:
+    - "9104:9104"
+    networks:
+    - bowmannet
+
+  node-exporter:
+      image: prom/node-exporter:latest
+      container_name: node-exporter
+      hostname: node-exporter
+      command:
+      - '--collector.systemd'
+      - '--collector.processes'
+      ports:
+      - "9100:9100"
+      networks:
+      - bowmannet
+
+  grafana:
+    image: grafana/grafana:latest
+    user: "root" #生产当中改变挂载目录权限，而不是靠root用户权限
+    container_name: grafana
+    hostname: grafana
+    restart: always
+    environment:
+        - TZ=Asia/Shanghai
+    ports:
+    - "3000:3000"
+    volumes:
+      - ./data/grafana:/var/lib/grafana
+    networks:
+    - bowmannet
+  
+  bowmansql:
+    build: ./soft/images/bowmansql/
+    user: "root"
+    container_name: bowmansql
+    hostname: bowmansql
+    restart: always
+    environment:
+        - TZ=Asia/Shanghai
+        - MYSQL_ROOT_PASSWORD=123456
+        # - MYSQL_CHARSET=utf8mb4 #这里是为了支持表情符号等等，普通的utf8不是全支持 #字符的这里我改方法了，
+    volumes:
+        - ./data/sql:/var/lib/mysql
+        - ./soft/images/bowmansql/my.cnf:/etc/my.cnf
+    ports:
+        - "3306:3306"
+    networks:
+        - bowmannet  
+
+  tursql:
+    build: ./soft/images/bowmansql/
+    user: "root"
+    container_name: tursql
+    hostname: tursql
+    restart: always
+    environment:
+        - TZ=Asia/Shanghai
+        - MYSQL_ROOT_PASSWORD=123456
+        # - MYSQL_CHARSET=utf8mb4 #这里是为了支持表情符号等等，普通的utf8不是全支持 #字符的这里我改方法了，
+    volumes:
+        - ./data/tursql:/var/lib/mysql
+        - ./backupdata/tursql:/root/backupdata # 设置备份文件位置
+        - ./soft/images/bowmansql/my.cnf:/etc/my.cnf
+    ports:
+        - "3307:3306"
+    networks:
+        - bowmannet
